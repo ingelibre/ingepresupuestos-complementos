@@ -1,0 +1,40 @@
+name: publicar
+on:
+  push:
+    branches: [main]
+    paths: ["fichas/**", "revisados.toml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/checkout@v4
+        with:
+          repository: ingelibre/ingepresupuestos
+          ref: main
+          path: .programa
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for intento in 1 2 3; do
+            python herramientas/catalogo.py armar
+            git add catalogo.json
+            git diff --cached --quiet && exit 0
+            git commit -m "catalogo.json"
+            git push && exit 0
+            git fetch origin main
+            git reset --hard origin/main
+          done
+          exit 1

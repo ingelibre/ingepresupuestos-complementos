@@ -1,0 +1,31 @@
+# Lee los complementos, nunca los ejecuta. Cada lunes, el catálogo entero.
+name: comprobar
+on:
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  comprobar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ingelibre/ingepresupuestos
+          ref: main
+          path: .programa
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest && python -m pytest -q pruebas
+      - name: Fichas
+        run: |
+          code=0
+          python herramientas/catalogo.py comprobar || code=$?
+          [ "$code" -eq 0 ] || [ "$code" -eq 3 ]

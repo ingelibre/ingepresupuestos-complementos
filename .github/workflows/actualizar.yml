@@ -1,0 +1,67 @@
+# Una versión nueva de quien ya está en el catálogo entra sola si la comprobación
+# sale limpia. SEGURIDAD: corre con permiso de escritura, así que nunca ejecuta
+# nada de la pull request: usa las herramientas de main y solo copia la ficha, que
+# es texto TOML. El complemento se descarga y se lee; no se ejecuta.
+name: actualizar
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+concurrency:
+  group: actualizar-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  actualizar:
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.base.ref == 'main' }}
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      COMMIT: ${{ github.event.pull_request.head.sha }}
+      CUENTA: ${{ github.event.pull_request.user.login }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ingelibre/ingepresupuestos
+          ref: main
+          path: .programa
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Decidir
+        id: decidir
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$REPO/pulls/$PR/files" --paginate \
+            --jq '.[] | "\(.status)\t\(.filename)"' > "$RUNNER_TEMP/cambios.tsv"
+          python herramientas/catalogo.py decidir "$CUENTA" "$RUNNER_TEMP/cambios.tsv" >> "$GITHUB_OUTPUT"
+      - name: Comprobar
+        id: comprobar
+        if: steps.decidir.outputs.id
+        env:
+          ID: ${{ steps.decidir.outputs.id }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$COMMIT"
+          rm -f "fichas/$ID.toml"
+          antes=$(git show "HEAD:fichas/$ID.toml" | grep -E '^(cuenta|repositorio) ')
+          git show "$COMMIT:fichas/$ID.toml" > "fichas/$ID.toml"
+          # Cambiar de dueño o de repositorio lo mira una persona.
+          [ "$antes" = "$(grep -E '^(cuenta|repositorio) ' "fichas/$ID.toml")" ] || exit 0
+          code=0
+          python herramientas/catalogo.py comprobar "$ID" || code=$?
+          if [ "$code" -eq 0 ]; then echo "limpio=si" >> "$GITHUB_OUTPUT"; fi
+      - name: Fusionar
+        if: steps.comprobar.outputs.limpio == 'si'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr merge "$PR" -R "$REPO" --squash --match-head-commit "$COMMIT"
+          gh workflow run publicar.yml -R "$REPO" --ref main

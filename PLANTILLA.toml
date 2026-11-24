@@ -1,0 +1,9 @@
+# Copia este archivo a fichas/<id>.toml. El nombre, la versión, el autor y la
+# descripción salen de tu complemento.json. IngePresupuestos llena esto por ti en
+# Complementos ▸ Instalados ▸ ⋯ ▸ Publicar…
+id = "mi-complemento"
+cuenta = "tu-cuenta-de-github"
+repositorio = "https://github.com/tu-cuenta/mi-complemento"
+# El .zip de una versión (release) o de un commit; nunca de una rama, que cambia.
+descarga = "https://github.com/tu-cuenta/mi-complemento/releases/download/v1.0.0/mi-complemento-1.0.0.zip"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
